@@ -1,0 +1,128 @@
+#!/bin/bash -e
+
+video_module='v4l2loopback'
+gopro_video_device_number="42"
+gopro_video_device="/dev/video${gopro_video_device_number}"
+
+declare -A commands
+commands=( \
+  ["start"]="-gp/gpWebcam/START"
+  ["1080p"]="-gp/gpWebcam/START?res=1080"
+  ["720p"]="-gp/gpWebcam/START?res=720"
+  ["480p"]="-gp/gpWebcam/START?res=480"
+  ["stop"]="-gp/gpWebcam/STOP"
+  ["wide"]="-gp/gpWebcam/SETTINGS?fov=0"
+  ["linear"]="-gp/gpWebcam/SETTINGS?fov=4"
+  ["narrow"]="-gp/gpWebcam/SETTINGS?fov=6"
+  ["preview"]="_vlc -vvv --network-caching=300 --sout-x264-preset=ultrafast --sout-x264-tune=zerolatency --sout-x264-vbv-bufsize 0 --sout-transcode-threads 4 --no-audio udp://@:8554"
+  ["device"]="=ffmpeg -nostdin -threads 1 -i udp://@0.0.0.0:8554?overrun_nonfatal=1&fifo_size=50000000 -f:v mpegts -fflags nobuffer -vf format=yuv420p -f v4l2 ${gopro_video_device}"
+)
+
+declare -A help
+help=( \
+  ["start"]="start webcam mode with default resolution"
+  ["1080p"]="start webcam mode with 1080p resolution"
+  ["720p"]="start webcam mode with 720p resolution"
+  ["480p"]="start webcam mode with 480p resolution"
+  ["stop"]="stop webcam mode"
+  ["wide"]="switch to wide FoV"
+  ["linear"]="switch to linear FoV"
+  ["narrow"]="switch to narrow FoV"
+  ["preview"]="preview webcam in VLC (requires webcam mode to be previously started)"
+  ["device"]="create v4l2 gopro device under ${gopro_video_device} with ffmpeg"
+)
+
+print_help() {
+  echo "usage: $0 commands..."
+  echo
+  echo "commands:"
+  for cmd in "${!commands[@]}"; do
+    echo "- ${cmd}: ${help["${cmd}"]}"
+  done | sort -n
+}
+
+print_troubleshooting() {
+  echo "TROUBLESHOOTING:"
+  echo "- double check that the camera has been turned on"
+  echo "- double check that the USB connection mode is GoPro Connect and not MTP under"
+  echo "  Preferences -> Connections -> USB Connection. If that option doesn't exist,"
+  echo "  you likely need a firmware upgrade instructions can be found in the official"
+  echo "  GoPro documentation at \`https://gopro.com/en/us/update\`"
+}
+
+[[ "$#" -gt 0 ]] || (print_help; exit 1)
+
+args=()
+while [[ "$#" -gt 0 ]]; do
+  arg="$1"; shift
+
+  if [[ -v "commands[\"${arg}\"]" ]]; then
+    args+=("${arg}")
+  else
+    echo "ERROR: unknown command: '${arg}' - remaining args: $*"
+    exit 1
+  fi
+done
+
+gopro_interface="$(ip -4 --oneline link | grep -v "state DOWN" | grep -v LOOPBACK | grep -v "NO-CARRIER" | cut -f2 -d":" | tail -1 | xargs)"
+if [[ -z "${gopro_interface}" ]]; then
+  echo "ERROR: can't find gopro device"
+  echo
+  print_troubleshooting
+  exit 1
+fi
+echo "gopro device: ${gopro_interface}"
+
+gopro_ip="$(ip -4 addr show dev ${gopro_interface} | grep -Po '(?<=inet )[\d.]+' | awk -F"." '{print $1"."$2"."$3".51"}')"
+if [[ -z "${gopro_ip}" ]]; then
+  echo "ERROR: can't find gopro ip"
+  echo
+  print_troubleshooting
+  exit 1
+fi
+echo "gopro ip: ${gopro_ip}"
+
+make_request() {
+  cmd="$1"; shift
+  url="http://${gopro_ip}/$*"
+
+  [[ -n "$*" ]] || (echo "ERROR: missing url for command '${cmd}'"; exit 1)
+
+  echo -n "command '${cmd}': ${url} ..."
+  response="$(curl -sf "${url}")"
+  reponse_code="$?"
+  [[ "${reponse_code}" -eq 0 ]] || (echo "ERROR: request failed: ${response_code}"; exit 1)
+  [[ -n "${response}" ]] || (echo "ERROR: empty response"; exit 1)
+  response_error="$(echo "${response}" | jq '.error')"
+  [[ "${response_error}" == 0 ]] || (echo "ERROR: response error: ${response_error}"; exit 1)
+
+  echo " succeeded"
+}
+
+for cmd in "${args[@]}"; do
+  value="${commands["${cmd}"]}"
+  case "${value:0:1}" in
+    -)
+      make_request "${cmd}" "${value:1}"
+      ;;
+    =)
+      loaded_module=false
+      if ! lsmod | grep "${video_module}"; then
+        (set -x; \
+          sudo modprobe "${video_module}" \
+            exclusive_caps=1 \
+            card_label='GoproLinux' \
+            video_nr="${gopro_video_device_number}" \
+        )
+        loaded_module=true
+      fi
+
+      (set -x; ${value:1})
+
+      [[ "${loaded_module}" != true ]] || (set -x; sudo modprobe -rf "${video_module}")
+      ;;
+    _)
+      (set -x; ${value:1} 2> /dev/null)
+      ;;
+  esac
+done
