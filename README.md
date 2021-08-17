@@ -65,7 +65,7 @@ example:
 
 ## `apt-get` (Debian, Ubuntu...)
 ```
-echo 'deb [trusted=yes] https://juchem.github.io/debian ./' \
+echo 'deb [trusted=yes] https://juchem.github.io/gopro-tool/debian/ ./' \
   | sudo tee /etc/apt/sources.list.d/gopro-tool.list
 sudo apt-get update
 sudo apt-get install gopro-tool
