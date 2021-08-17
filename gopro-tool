@@ -25,15 +25,16 @@ help=( \
   ["720p"]="start webcam mode with 720p resolution"
   ["480p"]="start webcam mode with 480p resolution"
   ["stop"]="stop webcam mode"
-  ["wide"]="switch to wide FoV"
-  ["linear"]="switch to linear FoV"
-  ["narrow"]="switch to narrow FoV"
+  ["wide"]="switch to wide field of view"
+  ["linear"]="switch to linear field of view"
+  ["narrow"]="switch to narrow field of view"
   ["preview"]="preview webcam in VLC (requires webcam mode to be previously started)"
-  ["device"]="create v4l2 gopro device under ${gopro_video_device} with ffmpeg"
+  ["device"]="create v4l2 gopro device under ${gopro_video_device} with ffmpeg (requires webcam mode to be previously started)"
 )
 
 print_help() {
-  echo "usage: $(basename "$0") commands..."
+  tool_name="$(basename "$0")"
+  echo "usage: ${tool_name} commands..."
   echo
   echo "commands:"
   for cmd in "${!commands[@]}"; do
@@ -41,14 +42,32 @@ print_help() {
   done | sort -n
   echo
   echo "example:"
-  echo "  \$ $(basename "$0") start narrow device"
-  echo "  - starts webcam mode using default resolution and narrow FoV, creating a"
-  echo "    v4l2 device that can be used by video conference or other software"
+  echo "  ${tool_name} start device"
+  echo "    - starts webcam mode using default resolution and make it available to"
+  echo "      video conference or other software"
+  echo
+  echo "  ${tool_name} start linear device"
+  echo "    - starts webcam mode using default resolution and linear FoV, and make it"
+  echo "    available to video conference or other software"
+  echo
+  echo "  ${tool_name} 480p narrow device"
+  echo "    - starts webcam mode using default resolution and narrow FoV, and make"
+  echo "      it available to video conference or other software"
+  echo
+  echo "  ${tool_name} 1080p linear preview"
+  echo "    - starts webcam mode using 1080p resolution and wide FoV, launching VLC"
+  echo "      to preview the video feed"
+  echo
+  echo "  ${tool_name} stop"
+  echo "    - stop webcam mode"
 }
 
 print_troubleshooting() {
   echo "TROUBLESHOOTING:"
   echo "- double check that the camera has been turned on"
+  echo
+  echo "- double check that the USB cable is properly connected to the camera and computer"
+  echo
   echo "- double check that the USB connection mode is GoPro Connect and not MTP under"
   echo "  Preferences -> Connections -> USB Connection. If that option doesn't exist,"
   echo "  you likely need a firmware upgrade instructions can be found in the official"
