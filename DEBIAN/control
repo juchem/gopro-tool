@@ -1,0 +1,9 @@
+Package: gopro-tool
+Version: 1.0
+Section: video
+Priority: optional
+Architecture: all
+Essential: no
+Installed-Size: INSTALLED_SIZE
+Maintainer: https://github.com/juchem/gopro-tool
+Description: A tool to control GoPro webcam mode in linux.
