@@ -33,12 +33,17 @@ help=( \
 )
 
 print_help() {
-  echo "usage: $0 commands..."
+  echo "usage: $(basename "$0") commands..."
   echo
   echo "commands:"
   for cmd in "${!commands[@]}"; do
     echo "- ${cmd}: ${help["${cmd}"]}"
   done | sort -n
+  echo
+  echo "example:"
+  echo "  \$ $(basename "$0") start narrow device"
+  echo "  - starts webcam mode using default resolution and narrow FoV, creating a"
+  echo "    v4l2 device that can be used by video conference or other software"
 }
 
 print_troubleshooting() {
