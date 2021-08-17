@@ -1,5 +1,5 @@
 Package: gopro-tool
-Version: 1.0
+Version: PACKAGE_VERSION
 Section: video
 Priority: optional
 Architecture: all
