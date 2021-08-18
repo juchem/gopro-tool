@@ -35,4 +35,5 @@ dpkg-deb --build "${OUT_DIR}"
 REPO_DIR="${BUILD_DIR}/apt-repo/debian"
 mkdir -p "${REPO_DIR}"
 cp "${BUILD_DIR}/${PACKAGE_NAME}.deb" "${REPO_DIR}/${PACKAGE_NAME}-${PACKAGE_VERSION}_all.deb"
-dpkg-scanpackages "${REPO_DIR}" | gzip -c9 > "${REPO_DIR}/Packages.gz"
+cd "${REPO_DIR}"
+dpkg-scanpackages . | gzip -c -9 | tee "${REPO_DIR}/Packages.gz" | gunzip
