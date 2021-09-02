@@ -5,6 +5,19 @@ PACKAGE_VERSION="1.$(git rev-list --count HEAD)"
 BUILD_DIR="${SRC_DIR}/out"
 OUT_DIR="${BUILD_DIR}/${PACKAGE_NAME}"
 
+do_release=false
+while [[ "$#" -gt 0 ]]; do
+  arg="$1"; shift
+  case  "${arg}" in
+    --release)
+      do_release=true
+      ;;
+
+    *)
+      ;;
+  esac
+done
+
 [ ! -d "${BUILD_DIR}" ] || rm -rf "${BUILD_DIR}"
 
 # usr/bin
@@ -37,3 +50,8 @@ mkdir -p "${REPO_DIR}"
 cp "${BUILD_DIR}/${PACKAGE_NAME}.deb" "${REPO_DIR}/${PACKAGE_NAME}-${PACKAGE_VERSION}_all.deb"
 cd "${REPO_DIR}"
 dpkg-scanpackages . | gzip -c -9 | tee "${REPO_DIR}/Packages.gz" | gunzip
+
+if [[ "${do_release}" == true ]]; then
+  git tag --force "v${PACKAGE_VERSION}"
+  git push --force --tags
+fi
