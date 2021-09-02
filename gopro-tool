@@ -3,9 +3,12 @@
 video_module='v4l2loopback'
 gopro_video_device_number="42"
 gopro_video_device="/dev/video${gopro_video_device_number}"
+threads="$((($(nproc) + 2) / 3))"
 
 declare -A commands
 commands=( \
+  ["vc-low"]=".480p device"
+  ["vc-high"]=".1080p device" #narrow
   ["start"]="-gp/gpWebcam/START"
   ["1080p"]="-gp/gpWebcam/START?res=1080"
   ["720p"]="-gp/gpWebcam/START?res=720"
@@ -14,8 +17,9 @@ commands=( \
   ["wide"]="-gp/gpWebcam/SETTINGS?fov=0"
   ["linear"]="-gp/gpWebcam/SETTINGS?fov=4"
   ["narrow"]="-gp/gpWebcam/SETTINGS?fov=6"
-  ["preview"]="_vlc -vvv --network-caching=300 --sout-x264-preset=ultrafast --sout-x264-tune=zerolatency --sout-x264-vbv-bufsize 0 --sout-transcode-threads 4 --no-audio udp://@:8554"
-  ["device"]="=ffmpeg -nostdin -threads 1 -i udp://@0.0.0.0:8554?overrun_nonfatal=1&fifo_size=50000000 -f:v mpegts -fflags nobuffer -vf format=yuv420p -f v4l2 ${gopro_video_device}"
+  ["preview"]="_command_preview"
+  ["device"]="=command_device"
+  ["device-cleanup"]="=command_remove_module"
 )
 
 declare -A help
@@ -30,11 +34,17 @@ help=( \
   ["narrow"]="switch to narrow field of view"
   ["preview"]="preview webcam in VLC (requires webcam mode to be previously started)"
   ["device"]="create v4l2 gopro device under ${gopro_video_device} with ffmpeg (requires webcam mode to be previously started)"
+  ["device-cleanup"]="removes the v4l2 gopro device module"
+  ["vc-low"]="a combination of commands '480p' and 'narrow'"
+  ["vc-high"]="a combination of commands '1080p' and 'narrow'"
 )
 
 print_help() {
   tool_name="$(basename "$0")"
-  echo "usage: ${tool_name} commands..."
+  echo "usage: ${tool_name} [options...] commands..."
+  echo
+  echo "options:"
+  echo "  --threads=N: use N threads (default is one third of the number of cores rounded up)"
   echo
   echo "commands:"
   for cmd in "${!commands[@]}"; do
@@ -74,18 +84,73 @@ print_troubleshooting() {
   echo "  GoPro documentation at \`https://gopro.com/en/us/update\`"
 }
 
+command_preview() {
+  vlc -vvv \
+    --network-caching=300 \
+    --sout-x264-preset=ultrafast \
+    --sout-x264-tune=zerolatency \
+    --sout-x264-vbv-bufsize 0 \
+    --sout-transcode-threads 4 \
+    --no-audio "udp://@:8554"
+}
+
+command_remove_module() {
+  if lsmod | grep "${video_module}" >/dev/null 2>/dev/null; then
+    (set -x; sudo modprobe -rf "${video_module}")
+    sleep .2
+  fi
+}
+
+command_device() {
+  command_remove_module
+
+  (set -x; \
+    sudo modprobe "${video_module}" \
+      exclusive_caps=1 \
+      card_label='GoproLinux' \
+      video_nr="${gopro_video_device_number}" \
+  )
+
+  ffmpeg -nostdin \
+    -threads "${threads}" \
+    -i "udp://@0.0.0.0:8554?overrun_nonfatal=1&fifo_size=50000000" \
+    -f:v mpegts \
+    -fflags nobuffer \
+    -vf format=yuv420p \
+    -f v4l2 "${gopro_video_device}"
+
+  command_remove_module
+}
+
 [[ "$#" -gt 0 ]] || (print_help; exit 1)
 
 args=()
 while [[ "$#" -gt 0 ]]; do
   arg="$1"; shift
 
-  if [[ -v "commands[\"${arg}\"]" ]]; then
-    args+=("${arg}")
-  else
-    echo "ERROR: unknown command: '${arg}' - remaining args: $*"
-    exit 1
-  fi
+  case "${arg}" in
+    -j | --threads)
+      [[ "$#" -gt 0 ]] || (echo "ERROR: missing number of threads after '${arg}'"; exit 1)
+      threads="${1}"; shift
+      ;;
+
+    -j[0-9]*)
+      threads="${arg:2}"
+      ;;
+
+    -threads=*)
+      threads="${arg#*=}"
+      ;;
+
+    *)
+      if [[ -v "commands[\"${arg}\"]" ]]; then
+        args+=("${arg}")
+      else
+        echo "ERROR: unknown command: '${arg}' - remaining args: $*"
+        exit 1
+      fi
+      ;;
+  esac
 done
 
 gopro_interface="$(ip -4 --oneline link | grep -v "state DOWN" | grep -v LOOPBACK | grep -v "NO-CARRIER" | cut -f2 -d":" | tail -1 | xargs)"
@@ -123,30 +188,33 @@ make_request() {
   echo " succeeded"
 }
 
-for cmd in "${args[@]}"; do
+run_command() {
+  cmd="$1"
   value="${commands["${cmd}"]}"
-  case "${value:0:1}" in
+  prefix="${value:0:1}"
+  suffix="${value:1}"
+
+  case "${prefix}" in
+    .)
+      for sub_cmd in ${suffix}; do
+        run_command "${sub_cmd}"
+      done
+      ;;
+
     -)
-      make_request "${cmd}" "${value:1}"
+      make_request "${cmd}" "${suffix}"
       ;;
+
     =)
-      loaded_module=false
-      if ! lsmod | grep "${video_module}"; then
-        (set -x; \
-          sudo modprobe "${video_module}" \
-            exclusive_caps=1 \
-            card_label='GoproLinux' \
-            video_nr="${gopro_video_device_number}" \
-        )
-        loaded_module=true
-      fi
-
-      (set -x; ${value:1})
-
-      [[ "${loaded_module}" != true ]] || (set -x; sudo modprobe -rf "${video_module}")
+      ${suffix}
       ;;
+
     _)
-      (set -x; ${value:1} 2> /dev/null)
+      ${suffix} 2> /dev/null
       ;;
   esac
+}
+
+for cmd in "${args[@]}"; do
+  run_command "${cmd}"
 done
