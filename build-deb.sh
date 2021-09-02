@@ -1,7 +1,7 @@
 #!/bin/bash -e
 SRC_DIR="$(git rev-parse --show-toplevel)"
 PACKAGE_NAME="gopro-tool"
-PACKAGE_VERSION="1.0"
+PACKAGE_VERSION="1.$(git rev-list --count HEAD)"
 BUILD_DIR="${SRC_DIR}/out"
 OUT_DIR="${BUILD_DIR}/${PACKAGE_NAME}"
 
