@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+tool_name="PACKAGE_NAME"
+tool_version="PACKAGE_VERSION"
 video_module='v4l2loopback'
 gopro_video_device_number="42"
 gopro_video_device="/dev/video${gopro_video_device_number}"
@@ -40,7 +42,8 @@ help=( \
 )
 
 print_help() {
-  tool_name="$(basename "$0")"
+  echo "${tool_name} ${tool_version}"
+  echo
   echo "usage: ${tool_name} [options...] commands..."
   echo
   echo "options:"
@@ -73,6 +76,8 @@ print_help() {
 }
 
 print_troubleshooting() {
+  echo "${tool_name} ${tool_version}"
+  echo
   echo "TROUBLESHOOTING:"
   echo "- double check that the camera has been turned on"
   echo

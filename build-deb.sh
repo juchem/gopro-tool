@@ -26,6 +26,10 @@ CURRENT_OUT_DIR="${OUT_DIR}/usr/bin"
 mkdir -p "${CURRENT_OUT_DIR}"
 for file in "gopro-tool"; do
   install --mode=755 "${CURRENT_SRC_DIR}/${file}" "${CURRENT_OUT_DIR}/${file}"
+  sed \
+    -e "s/PACKAGE_NAME/${PACKAGE_NAME}/g" \
+    -e "s/PACKAGE_VERSION/${PACKAGE_VERSION}/g" \
+    -i "${CURRENT_OUT_DIR}/${file}"
 done
 
 installed_size="$(du -sb "${OUT_DIR}" | awk '{print $1}')"
@@ -37,6 +41,7 @@ mkdir -p "${CURRENT_OUT_DIR}"
 for file in "control"; do
   sed \
     -e "s/INSTALLED_SIZE/${installed_size}/g" \
+    -e "s/PACKAGE_NAME/${PACKAGE_NAME}/g" \
     -e "s/PACKAGE_VERSION/${PACKAGE_VERSION}/g" \
     "${CURRENT_SRC_DIR}/${file}" \
     > "${CURRENT_OUT_DIR}/${file}"
