@@ -1,9 +1,13 @@
 Package: gopro-tool
 Version: PACKAGE_VERSION
+Source: gopro-tool (PACKAGE_VERSION)
 Section: video
 Priority: optional
 Architecture: all
 Essential: no
 Installed-Size: INSTALLED_SIZE
 Maintainer: https://github.com/juchem/gopro-tool
+APT-Sources: https://juchem.github.io/gopro-tool/debian/ ./
+Depends: coreutils, bash, grep, curl, iproute2, jq
+Recommends: vlc, ffmpeg, v4l2loopback-dkms, kmod, sudo
 Description: A tool to control GoPro webcam mode in linux.
