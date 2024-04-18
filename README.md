@@ -39,6 +39,7 @@ commands:
 - start: start webcam mode with default resolution
 - stop: stop webcam mode
 - wide: switch to wide field of view
+- troubleshoot: print troubleshooting instructions
 
 example:
   gopro-tool start device

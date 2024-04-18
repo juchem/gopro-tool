@@ -22,6 +22,7 @@ commands=( \
   ["preview"]="_command_preview"
   ["device"]="=command_device"
   ["device-cleanup"]="=command_remove_module"
+  ["troubleshoot"]="=print_troubleshooting"
 )
 
 declare -A help
@@ -39,54 +40,92 @@ help=( \
   ["device-cleanup"]="removes the v4l2 gopro device module"
   ["vc-low"]="a combination of commands '480p' and 'narrow'"
   ["vc-high"]="a combination of commands '1080p' and 'narrow'"
+  ["troubleshoot"]="=print troubleshooting information"
 )
 
 print_help() {
-  echo "${tool_name} ${tool_version}"
-  echo
-  echo "usage: ${tool_name} [options...] commands..."
-  echo
-  echo "options:"
-  echo "  --threads=N: use N threads (default is one third of the number of cores rounded up)"
-  echo
-  echo "commands:"
+cat <<EOF
+${tool_name} ${tool_version}
+
+usage: ${tool_name} [options...] commands...
+
+options:
+  --threads=N: use N threads (default is one third of the number of cores rounded up)
+
+commands:
+EOF
+
   for cmd in "${!commands[@]}"; do
     echo "- ${cmd}: ${help["${cmd}"]}"
   done | sort -n
-  echo
-  echo "example:"
-  echo "  ${tool_name} start device"
-  echo "    - starts webcam mode using default resolution and make it available to"
-  echo "      video conference or other software"
-  echo
-  echo "  ${tool_name} start linear device"
-  echo "    - starts webcam mode using default resolution and linear FoV, and make it"
-  echo "    available to video conference or other software"
-  echo
-  echo "  ${tool_name} 480p narrow device"
-  echo "    - starts webcam mode using default resolution and narrow FoV, and make"
-  echo "      it available to video conference or other software"
-  echo
-  echo "  ${tool_name} 1080p linear preview"
-  echo "    - starts webcam mode using 1080p resolution and wide FoV, launching VLC"
-  echo "      to preview the video feed"
-  echo
-  echo "  ${tool_name} stop"
-  echo "    - stop webcam mode"
+
+cat <<EOF
+
+example:
+  ${tool_name} start device
+    - starts webcam mode using default resolution and make it available to
+      video conference or other software
+
+  ${tool_name} start linear device
+    - starts webcam mode using default resolution and linear FoV, and make it
+    available to video conference or other software
+
+  ${tool_name} 480p narrow device
+    - starts webcam mode using default resolution and narrow FoV, and make
+      it available to video conference or other software
+
+  ${tool_name} 1080p linear preview
+    - starts webcam mode using 1080p resolution and wide FoV, launching VLC
+      to preview the video feed
+
+  ${tool_name} stop
+    - stop webcam mode
+
+auto-detect:
+  The tool will attempt auto-detection of the GoPro network endpoint. This
+  process might fail if more than one network interface appears to have the
+  same characteristics.
+
+  You can explicitly inform the tool of the correct IP address of the GoPro
+  by setting the \`GOPRO_IP\` environment variable:
+  \`\`\`
+  GOPRO_IP=123.456.789.0 gopro-tool commands...
+  \`\`\`
+  Alternatively, you can inform the tool of the corrent network interface
+  name by setting the \`GOPRO_INTERFACE\` environment variable:
+  \`\`\`
+  GOPRO_INTERFACE=goproiface gopro-tool commands...
+  \`\`\`
+  Use the command \`ip -4 addr\` to list all available network interfaces.
+EOF
 }
 
 print_troubleshooting() {
-  echo "${tool_name} ${tool_version}"
-  echo
-  echo "TROUBLESHOOTING:"
-  echo "- double check that the camera has been turned on"
-  echo
-  echo "- double check that the USB cable is properly connected to the camera and computer"
-  echo
-  echo "- double check that the USB connection mode is GoPro Connect and not MTP under"
-  echo "  Preferences -> Connections -> USB Connection. If that option doesn't exist,"
-  echo "  you likely need a firmware upgrade instructions can be found in the official"
-  echo "  GoPro documentation at \`https://gopro.com/en/us/update\`"
+  cat <<EOF
+${tool_name} ${tool_version}
+
+TROUBLESHOOTING:
+- double check that the camera has been turned on
+
+- double check that the USB cable is properly connected to the camera and computer
+
+- double check that the USB connection mode is GoPro Connect and not MTP under
+  Preferences -> Connections -> USB Connection. If that option doesn't exist,
+  you likely need a firmware upgrade instructions can be found in the official
+  GoPro documentation at \`https://gopro.com/en/us/update\`
+EOF
+
+interface_candidates=($(ip -4 --oneline link | grep -v "state DOWN" | grep -v LOOPBACK | grep -v "NO-CARRIER" | cut -f2 -d":"))
+if [[ "${#interface_candidates[@]}" -gt 1 ]]; then
+  cat <<EOF
+
+- a total of ${#interface_candidates[@]} GoPro network interface candidates have been found. The tool may
+  not be able to auto-detect the right one. Consider explicitly picking the GoPro
+  IP address or network interface. Check the \`auto-detect\` section of the help
+  message by running \`${tool_name}\` without any arguments.
+
+EOF
+fi
 }
 
 command_preview() {
@@ -158,23 +197,33 @@ while [[ "$#" -gt 0 ]]; do
   esac
 done
 
-gopro_interface="$(ip -4 --oneline link | grep -v "state DOWN" | grep -v LOOPBACK | grep -v "NO-CARRIER" | cut -f2 -d":" | tail -1 | xargs)"
-if [[ -z "${gopro_interface}" ]]; then
-  echo "ERROR: can't find gopro device"
-  echo
-  print_troubleshooting
-  exit 1
-fi
-echo "gopro device: ${gopro_interface}"
-
-gopro_ip="$(ip -4 addr show dev ${gopro_interface} | grep -Po '(?<=inet )[\d.]+' | awk -F"." '{print $1"."$2"."$3".51"}')"
+gopro_ip="${GOPRO_IP}"
 if [[ -z "${gopro_ip}" ]]; then
-  echo "ERROR: can't find gopro ip"
-  echo
-  print_troubleshooting
-  exit 1
+  gopro_interface="${GOPRO_INTERFACE}"
+  if [[ -z "${gopro_interface}" ]]; then
+    gopro_interface="$(ip -4 --oneline link | grep -v "state DOWN" | grep -v LOOPBACK | grep -v "NO-CARRIER" | cut -f2 -d":" | tail -1 | xargs)"
+  fi
+  if [[ -z "${gopro_interface}" ]]; then
+    echo "ERROR: can't find gopro device"
+    echo
+    print_troubleshooting
+    exit 1
+  fi
+
+  gopro_ip="$(ip -4 addr show dev "${gopro_interface}" | grep -Po '(?<=inet )[\d.]+' | awk -F"." '{print $1"."$2"."$3".51"}')"
+  if [[ -z "${gopro_ip}" ]]; then
+    echo "ERROR: can't find gopro ip"
+    echo
+    print_troubleshooting
+    exit 1
+  fi
 fi
-echo "gopro ip: ${gopro_ip}"
+
+cat <<EOF
+gopro device: ${gopro_interface}
+gopro ip: ${gopro_ip}
+
+EOF
 
 make_request() {
   cmd="$1"; shift
